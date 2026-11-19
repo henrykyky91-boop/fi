@@ -1,0 +1,57 @@
+name: APK bauen
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+
+      - name: Leaflet einbinden
+        run: |
+          set -e
+          cd "$RUNNER_TEMP"
+          npm pack leaflet@1.9.4
+          tar xzf leaflet-1.9.4.tgz
+          LIB="$GITHUB_WORKSPACE/app/src/main/assets/web/lib"
+          mkdir -p "$LIB"
+          cp package/dist/leaflet.js package/dist/leaflet.css "$LIB/"
+          cp -r package/dist/images "$LIB/"
+
+      - name: APK bauen
+        run: gradle :app:assembleRelease --no-daemon --stacktrace
+
+      - name: APK umbenennen
+        run: cp app/build/outputs/apk/release/app-release.apk Peilung.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Peilung
+          path: Peilung.apk
+
+      - name: Release veröffentlichen
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: Peilung 1.0.${{ github.run_number }}
+          body: |
+            APK zum direkten Installieren auf Android.
+            Immer aktuell: https://github.com/${{ github.repository }}/releases/latest/download/Peilung.apk
+          files: Peilung.apk
+          make_latest: true
