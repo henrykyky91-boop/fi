@@ -149,6 +149,7 @@ function solveFix() {
 let pos = null, geoWatch = null, geoError = null, decl = 0, declAt = null;
 
 function startGeo() {
+  if (typeof nativeLoc !== 'undefined' && nativeLoc) return;
   if (!navigator.geolocation) { geoError = 'Kein GPS verfügbar'; return; }
   if (geoWatch !== null) navigator.geolocation.clearWatch(geoWatch);
   geoWatch = navigator.geolocation.watchPosition(onPos, err => {
@@ -170,13 +171,32 @@ function onPos(p) {
   updateGpsChip();
 }
 window.onNativePermissions = () => { startGeo(); if (Cam.open && !Cam.stream) startStream(); };
+/* GPS direkt aus Android; Netzwerk-Ortung nur, solange kein frischer GPS-Wert da ist */
+let nativeLoc = false, lastGpsAt = 0;
+window.onNativeLoc = (lat, lon, acc, alt, speed, src) => {
+  if (!nativeLoc) { nativeLoc = true; if (geoWatch !== null) { navigator.geolocation.clearWatch(geoWatch); geoWatch = null; } }
+  if (src === 'gps') lastGpsAt = Date.now();
+  else if (Date.now() - lastGpsAt < 15000) return;
+  onPos({ coords: { latitude: lat, longitude: lon, accuracy: acc, altitude: alt } });
+};
 
 /* ================= Kompass ================= */
 /* Blickrichtung der Rückkamera aus alpha/beta/gamma (W3C-Rotationsmatrix, Spalte z negiert) */
 const O = { cam: null, top: null, last: 0, hist: [], abs: false, seen: false };
 
+/* Android-Sensoren direkt (genauer als die Browser-Ereignisse, v. a. bei aufrecht gehaltenem Handy) */
+window.onNativeOri = (cx, cy, cz, tx, ty, tz, acc, mag) => {
+  O.native = true; O.seen = true; O.abs = true; O.acc = acc; O.mag = mag;
+  const cam = [cx, cy, cz], top = [tx, ty, tz];
+  O.cam = O.cam ? mix(O.cam, cam, 0.25) : cam;
+  O.top = O.top ? mix(O.top, top, 0.25) : top;
+  const now = performance.now();
+  O.last = now;
+  O.hist.push({ t: now, v: cam });
+  while (O.hist.length && now - O.hist[0].t > 1500) O.hist.shift();
+};
 function onOrientation(e) {
-  if (e.alpha == null) return;
+  if (O.native || e.alpha == null) return;
   const absolute = e.type === 'deviceorientationabsolute' || e.absolute === true;
   O.seen = true;
   if (!absolute) return;
@@ -962,6 +982,7 @@ function loop() {
     $('#hdgSub').textContent = `${dirName(h + off.dh)} · Höhe ${fmtSigned(el + off.de)}`;
     const j = jitterDeg();
     if (vecHoriz(O.cam) < 0.25) { hint = 'Handy nicht so steil nach oben halten'; warn = true; }
+    else if (O.native && (O.mag === 0 || O.mag === 1)) { hint = 'Kompass ungenau: Handy ein paarmal in Form einer 8 schwenken'; warn = true; }
     else if (j > 4) { hint = 'Ruhig halten …'; warn = true; }
     else if (Cam.mode === 'calib' && calibTarget) hint = 'Kalibrieren: Fadenkreuz genau auf den gewählten Punkt richten, dann OK';
     else hint = Cam.tap ? 'Markierung gesetzt. OK übernimmt diese Richtung.' : 'Licht ins Fadenkreuz nehmen oder antippen';

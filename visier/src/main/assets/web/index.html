@@ -29,6 +29,7 @@
     <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
     <symbol id="i-redo" viewBox="0 0 24 24"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 4.5v4h-4"/></symbol>
     <symbol id="i-move" viewBox="0 0 24 24"><path d="M3.5 12h17M16.5 8l4 4-4 4M7.5 8l-4 4 4 4"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s-6.5-6.1-6.5-11a6.5 6.5 0 0 1 13 0c0 4.9-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></symbol>
     <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
   </defs>
 </svg>
@@ -42,6 +43,7 @@
     <button type="button" id="qClear" class="q-clear" aria-label="Suche leeren" hidden><svg class="ic"><use href="#i-close"/></svg></button>
   </form>
   <ul id="results" class="results" hidden></ul>
+  <button id="gpsPill" class="gps-pill" hidden><i></i><span>GPS sucht …</span></button>
   <div id="banner" class="banner" hidden>
     <p id="bannerText"></p>
     <button id="bannerCancel" class="link-btn">Abbrechen</button>
@@ -51,6 +53,7 @@
 <div class="fabs">
   <button id="btnLayers" class="fab" aria-label="Kartenansicht"><svg class="ic"><use href="#i-layers"/></svg></button>
   <button id="btnLocate" class="fab" aria-label="Mein Standort"><svg class="ic"><use href="#i-locate"/></svg></button>
+  <button id="btnPin" class="fab" aria-label="Standort genau festlegen"><svg class="ic"><use href="#i-pin"/></svg></button>
 </div>
 
 <nav class="dock">
@@ -58,6 +61,12 @@
   <button id="btnAim" class="aim-btn"><svg class="ic"><use href="#i-aim"/></svg><span>Anvisieren</span></button>
   <button id="btnSettings" class="dock-btn"><svg class="ic"><use href="#i-tune"/></svg><span>Optionen</span></button>
 </nav>
+
+<div id="pinCross" class="pin-cross" hidden><i></i><i></i><b></b></div>
+<div id="pinBar" class="pinbar" hidden>
+  <p>Schieb die Karte, bis das Kreuz genau auf der Stelle liegt, an der du stehst. Ganz nah ranzoomen hilft.</p>
+  <div class="row2"><button class="btn ghost" id="pinCancel">Abbrechen</button><button class="btn" id="pinOk">Hier stehe ich</button></div>
+</div>
 
 <div id="scrim" class="scrim" hidden></div>
 <section id="sheet" class="sheet" aria-hidden="true">
@@ -74,12 +83,21 @@
       <div id="hdg" class="hdg">–––°</div>
       <div id="hdgSub" class="hdg-sub">Kompass startet</div>
     </div>
-    <div id="gpsChip" class="chip">GPS</div>
+    <div class="chips"><div id="gpsChip" class="chip">GPS</div><div id="cmpChip" class="chip">Kompass</div></div>
   </div>
   <canvas id="tape" class="tape"></canvas>
   <div class="cross" aria-hidden="true"><i></i><i></i><i></i><i></i><b></b></div>
   <div id="tapMark" class="tapmark" hidden></div>
+  <div class="cam-map-wrap">
+    <div id="camMap"></div>
+    <span class="cam-map-note">Antippen = Kompass ausrichten</span>
+  </div>
+  <div id="liveTag" class="live-tag" hidden><b></b><small></small></div>
   <p id="camHint" class="cam-hint"></p>
+  <div id="alignBar" class="align-bar" hidden>
+    <p></p>
+    <div class="row2"><button class="btn ghost" id="alignNo">Abbrechen</button><button class="btn" id="alignYes">Ausrichten</button></div>
+  </div>
   <div class="cam-bottom">
     <div class="zoom">
       <span class="zoom-min">1×</span>

@@ -10,9 +10,20 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.hardware.GeomagneticField;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
+import android.location.GnssStatus;
+import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.SystemClock;
 import android.view.HapticFeedbackConstants;
 import android.view.View;
 import android.view.WindowInsets;
@@ -33,7 +44,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-public class MainActivity extends Activity {
+public class MainActivity extends Activity implements SensorEventListener {
 
     private static final String HOST = "appassets.androidplatform.net";
     private static final String START_URL = "https://" + HOST + "/assets/web/index.html";
@@ -48,6 +59,21 @@ public class MainActivity extends Activity {
 
     private float insetTop = 0f;
     private float insetBottom = 0f;
+
+    /* Sensoren direkt von Android: Lage im Raum (Rotationsvektor) mit Kursgenauigkeit */
+    private SensorManager sensors;
+    private Sensor rotSensor, magSensor;
+    private final float[] rotMat = new float[9];
+    private final float[] rotVec = new float[4];
+    private long lastOriPush = 0;
+    private int magAccuracy = -1;
+
+    /* GPS direkt, ohne Umweg über den Browser */
+    private LocationManager locMgr;
+    private LocationListener locListener;
+    private GnssStatus.Callback gnssCallback;
+    private int satsUsed = -1, satsSeen = -1;
+    private boolean locRunning = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -167,6 +193,13 @@ public class MainActivity extends Activity {
 
         web.addJavascriptInterface(new Bridge(), "Native");
 
+        sensors = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+        if (sensors != null) {
+            rotSensor = sensors.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR);
+            magSensor = sensors.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
+        }
+        locMgr = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+
         askStartPermissions();
 
         if (savedInstanceState != null) {
@@ -209,9 +242,110 @@ public class MainActivity extends Activity {
             pendingGeoCallback = null;
             pendingGeoOrigin = null;
         }
+        startLocation();
         if (web != null) {
             web.evaluateJavascript("window.onNativePermissions && window.onNativePermissions()", null);
         }
+    }
+
+    /* ---------- Sensoren ---------- */
+    private void startSensors() {
+        if (sensors == null) return;
+        if (rotSensor != null) sensors.registerListener(this, rotSensor, SensorManager.SENSOR_DELAY_GAME);
+        if (magSensor != null) sensors.registerListener(this, magSensor, SensorManager.SENSOR_DELAY_UI);
+    }
+
+    private void stopSensors() {
+        if (sensors != null) sensors.unregisterListener(this);
+    }
+
+    @Override
+    public void onSensorChanged(SensorEvent e) {
+        if (e.sensor.getType() != Sensor.TYPE_ROTATION_VECTOR || web == null) return;
+        long now = SystemClock.uptimeMillis();
+        if (now - lastOriPush < 30) return;
+        lastOriPush = now;
+        int n = Math.min(4, e.values.length);
+        for (int i = 0; i < 4; i++) rotVec[i] = i < n ? e.values[i] : 0f;
+        if (n < 4) {
+            float w = 1f - rotVec[0] * rotVec[0] - rotVec[1] * rotVec[1] - rotVec[2] * rotVec[2];
+            rotVec[3] = w > 0 ? (float) Math.sqrt(w) : 0f;
+        }
+        SensorManager.getRotationMatrixFromVector(rotMat, rotVec);
+        float headAcc = e.values.length > 4 && e.values[4] >= 0 ? (float) Math.toDegrees(e.values[4]) : -1f;
+        // Rückkamera = negative Z-Achse des Geräts, Oberkante = Y-Achse; Welt: Ost, Nord, Oben
+        String js = String.format(Locale.US,
+                "window.onNativeOri&&window.onNativeOri(%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.2f,%d)",
+                -rotMat[2], -rotMat[5], -rotMat[8], rotMat[1], rotMat[4], rotMat[7], headAcc, magAccuracy);
+        web.evaluateJavascript(js, null);
+    }
+
+    @Override
+    public void onAccuracyChanged(Sensor sensor, int accuracy) {
+        if (sensor.getType() == Sensor.TYPE_MAGNETIC_FIELD) magAccuracy = accuracy;
+    }
+
+    /* ---------- GPS ---------- */
+    private void startLocation() {
+        if (locRunning || locMgr == null) return;
+        boolean fine = has(Manifest.permission.ACCESS_FINE_LOCATION);
+        if (!fine && !has(Manifest.permission.ACCESS_COARSE_LOCATION)) return;
+        if (locListener == null) {
+            locListener = new LocationListener() {
+                @Override public void onLocationChanged(Location l) { pushLocation(l); }
+                @Override public void onProviderEnabled(String p) { }
+                @Override public void onProviderDisabled(String p) { }
+                @SuppressWarnings("deprecation")
+                @Override public void onStatusChanged(String p, int s, Bundle b) { }
+            };
+        }
+        try {
+            if (fine && locMgr.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+                locMgr.requestLocationUpdates(LocationManager.GPS_PROVIDER, 500L, 0f, locListener, Looper.getMainLooper());
+                Location last = locMgr.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+                if (last != null && System.currentTimeMillis() - last.getTime() < 60000) pushLocation(last);
+            }
+            if (locMgr.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+                locMgr.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 2000L, 0f, locListener, Looper.getMainLooper());
+            }
+            if (fine) {
+                if (gnssCallback == null) {
+                    gnssCallback = new GnssStatus.Callback() {
+                        @Override
+                        public void onSatelliteStatusChanged(GnssStatus st) {
+                            int used = 0, n = st.getSatelliteCount();
+                            for (int i = 0; i < n; i++) if (st.usedInFix(i)) used++;
+                            satsUsed = used;
+                            satsSeen = n;
+                        }
+                    };
+                }
+                locMgr.registerGnssStatusCallback(gnssCallback, new Handler(Looper.getMainLooper()));
+            }
+            locRunning = true;
+        } catch (SecurityException | IllegalArgumentException ignored) {
+        }
+    }
+
+    private void stopLocation() {
+        if (!locRunning || locMgr == null) return;
+        try {
+            locMgr.removeUpdates(locListener);
+            if (gnssCallback != null) locMgr.unregisterGnssStatusCallback(gnssCallback);
+        } catch (SecurityException ignored) {
+        }
+        locRunning = false;
+    }
+
+    private void pushLocation(Location l) {
+        if (web == null || l == null) return;
+        String js = String.format(Locale.US,
+                "window.onNativeLoc&&window.onNativeLoc(%.8f,%.8f,%.2f,%.2f,%.2f,'%s',%d,%d,%d)",
+                l.getLatitude(), l.getLongitude(), l.hasAccuracy() ? l.getAccuracy() : 999f,
+                l.hasAltitude() ? l.getAltitude() : 0d, l.hasSpeed() ? l.getSpeed() : -1f,
+                LocationManager.GPS_PROVIDER.equals(l.getProvider()) ? "gps" : "net",
+                l.getTime(), satsUsed, satsSeen);
+        web.evaluateJavascript(js, null);
     }
 
     private void pushInsets() {
@@ -245,6 +379,8 @@ public class MainActivity extends Activity {
     @Override
     protected void onPause() {
         super.onPause();
+        stopSensors();
+        stopLocation();
         if (web != null) {
             web.evaluateJavascript("window.onAppPause && window.onAppPause()", null);
             web.onPause();
@@ -254,6 +390,8 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        startSensors();
+        startLocation();
         if (web != null) {
             web.onResume();
             web.evaluateJavascript("window.onAppResume && window.onAppResume()", null);
@@ -343,6 +481,11 @@ public class MainActivity extends Activity {
                 } catch (ActivityNotFoundException ignored) {
                 }
             });
+        }
+
+        @JavascriptInterface
+        public boolean hasNativeSensors() {
+            return rotSensor != null;
         }
 
         @JavascriptInterface
