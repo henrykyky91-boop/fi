@@ -14,7 +14,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
@@ -29,29 +29,38 @@ jobs:
           cd "$RUNNER_TEMP"
           npm pack leaflet@1.9.4
           tar xzf leaflet-1.9.4.tgz
-          LIB="$GITHUB_WORKSPACE/app/src/main/assets/web/lib"
-          mkdir -p "$LIB"
-          cp package/dist/leaflet.js package/dist/leaflet.css "$LIB/"
-          cp -r package/dist/images "$LIB/"
+          for M in app visier; do
+            LIB="$GITHUB_WORKSPACE/$M/src/main/assets/web/lib"
+            mkdir -p "$LIB"
+            cp package/dist/leaflet.js package/dist/leaflet.css "$LIB/"
+            cp -r package/dist/images "$LIB/"
+          done
 
-      - name: APK bauen
-        run: gradle :app:assembleRelease --no-daemon --stacktrace
+      - name: APKs bauen
+        run: gradle :app:assembleRelease :visier:assembleRelease --no-daemon --stacktrace
 
-      - name: APK umbenennen
-        run: cp app/build/outputs/apk/release/app-release.apk Peilung.apk
+      - name: APKs umbenennen
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk Peilung.apk
+          cp visier/build/outputs/apk/release/visier-release.apk Visier.apk
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Peilung
-          path: Peilung.apk
+          name: Apps
+          path: |
+            Peilung.apk
+            Visier.apk
 
       - name: Release veröffentlichen
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0.${{ github.run_number }}
-          name: Peilung 1.0.${{ github.run_number }}
+          name: Peilung & Visier 1.0.${{ github.run_number }}
           body: |
-            APK zum direkten Installieren auf Android.
-            Immer aktuell: https://github.com/${{ github.repository }}/releases/latest/download/Peilung.apk
-          files: Peilung.apk
+            APKs zum direkten Installieren auf Android.
+            Peilung: https://github.com/${{ github.repository }}/releases/latest/download/Peilung.apk
+            Visier: https://github.com/${{ github.repository }}/releases/latest/download/Visier.apk
+          files: |
+            Peilung.apk
+            Visier.apk
           make_latest: true

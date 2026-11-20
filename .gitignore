@@ -5,3 +5,5 @@ local.properties
 *.iml
 .idea/
 app/src/main/assets/web/lib/
+visier/build/
+visier/src/main/assets/web/lib/

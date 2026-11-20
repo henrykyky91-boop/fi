@@ -1,4 +1,14 @@
-# Peilung
+# Peilung & Visier
+
+Zwei Android-Apps im gleichen Stil.
+
+## Visier
+
+Gebäude, Turm oder Hügel anvisieren und sofort sehen, wo genau das auf der Karte ist – mit nur einem Blick. Visier lädt Gebäudeumrisse und Türme (OpenStreetMap) sowie Geländehöhen (Copernicus DEM) entlang der Blickrichtung, berechnet, was von deinem Standort aus wirklich sichtbar ist (Verdeckung, Erdkrümmung), und setzt den Punkt auf das Objekt, das Richtung und Höhenwinkel am besten erklärt. Alternativen mit Wahrscheinlichkeit, Adresse, Google Maps, Route, Punkt manuell verschiebbar.
+
+**Download:** [Visier.apk](../../releases/latest/download/Visier.apk)
+
+## Peilung
 
 Android-App: Licht oder Objekt in der Ferne mit der Kamera anpeilen, Richtung als Linie auf der Satellitenkarte sehen, mit einer zweiten Peilung von einem anderen Ort den genauen Punkt bestimmen.
 
