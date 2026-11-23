@@ -694,7 +694,14 @@ def serve(args):
             time.sleep(6 * 3600)
 
     threading.Thread(target=janitor, daemon=True).start()
-    httpd = ThreadingHTTPServer((args.host, args.port), Handler)
+    class Server(ThreadingHTTPServer):
+        def handle_error(self, request, client_address):
+            # Abgebrochene Verbindungen (Handy weg, WLAN gewechselt) sind normal -> nicht ins Log
+            if isinstance(sys.exc_info()[1], (ConnectionResetError, BrokenPipeError, TimeoutError)):
+                return
+            super().handle_error(request, client_address)
+
+    httpd = Server((args.host, args.port), Handler)
     httpd.daemon_threads = True
     log("Spur Server %s laeuft auf http://%s:%d  (Daten: %s)" % (VERSION, args.host, args.port, store.dir))
     log("Schluessel fuer die App:", store.cfg["token"])

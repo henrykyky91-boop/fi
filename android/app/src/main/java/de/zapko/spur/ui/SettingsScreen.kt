@@ -98,7 +98,13 @@ fun ServerForm(onSaved: (ServerInfo) -> Unit = {}) {
             busy = true
             scope.launch {
                 var u = url.trim().trimEnd('/')
-                if (u.isNotEmpty() && !u.startsWith("http")) u = "https://$u"
+                if (u.isNotEmpty() && !u.startsWith("http://") && !u.startsWith("https://")) {
+                    // IP-Adresse, .local oder eigener Port -> Heimnetz (http), sonst Domain (https)
+                    val host = u.substringBefore('/').substringBefore(':')
+                    val local = host.all { it.isDigit() || it == '.' } || host.endsWith(".local") ||
+                        host == "localhost" || u.substringBefore('/').contains(':')
+                    u = (if (local) "http://" else "https://") + u
+                }
                 url = u
                 val info = withContext(Dispatchers.IO) { repo.api.ping(u, token) }
                 result = info
