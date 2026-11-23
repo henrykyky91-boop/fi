@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spur</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  :root { --bg:#000; --s1:#0d0d0d; --s2:#161616; --line:#222; --t1:#f2f2f2; --t2:#8a8a8a; --acc:#e8ff47; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html,body { height:100%; background:var(--bg); color:var(--t1); font:14px/1.4 Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+  button,input { font:inherit; color:inherit; }
+  header { height:52px; display:flex; align-items:center; gap:16px; padding:0 16px; border-bottom:1px solid var(--line); }
+  .logo { font-weight:800; letter-spacing:-.5px; font-size:18px; }
+  .logo b { color:var(--acc); }
+  nav button { background:none; border:0; color:var(--t2); padding:6px 10px; cursor:pointer; border-radius:6px; }
+  nav button.on { color:var(--t1); background:var(--s2); }
+  .grow { flex:1; }
+  .stat { color:var(--t2); font-variant-numeric:tabular-nums; font-size:12px; }
+  input.search { background:var(--s1); border:1px solid var(--line); border-radius:6px; padding:7px 10px; width:220px; outline:none; }
+  main { height:calc(100% - 52px); position:relative; }
+  #map { position:absolute; inset:0; background:#0a0a0a; }
+  #grid { position:absolute; inset:0; overflow:auto; padding:16px; display:none; }
+  .month { color:var(--t2); font-size:12px; text-transform:uppercase; letter-spacing:1px; margin:18px 2px 8px; }
+  .tiles { display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:3px; }
+  .tile { aspect-ratio:1; background:var(--s1) center/cover no-repeat; cursor:pointer; position:relative; border-radius:2px; }
+  .tile .v { position:absolute; right:4px; bottom:4px; font-size:10px; background:#000a; padding:1px 4px; border-radius:3px; }
+  .tile .s { position:absolute; left:4px; top:4px; width:6px; height:6px; border-radius:50%; background:#fffc00; }
+  #login { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:var(--bg); z-index:2000; }
+  #login form { width:320px; display:flex; flex-direction:column; gap:12px; }
+  #login input { background:var(--s1); border:1px solid var(--line); border-radius:8px; padding:12px; outline:none; }
+  #login button { background:var(--t1); color:#000; border:0; border-radius:8px; padding:12px; font-weight:700; cursor:pointer; }
+  #login .err { color:#ff6b6b; font-size:12px; min-height:16px; }
+  #view { position:fixed; inset:0; background:#000e; display:none; z-index:3000; }
+  #view .media { position:absolute; inset:0 360px 0 0; display:flex; align-items:center; justify-content:center; }
+  #view img, #view video { max-width:100%; max-height:100%; }
+  #view aside { position:absolute; top:0; right:0; bottom:0; width:360px; background:var(--s1); border-left:1px solid var(--line); padding:20px; overflow:auto; }
+  #view h2 { font-size:18px; margin-bottom:4px; }
+  #view .sub { color:var(--t2); margin-bottom:16px; }
+  .row { display:flex; justify-content:space-between; gap:12px; padding:7px 0; border-bottom:1px solid var(--line); }
+  .row span:first-child { color:var(--t2); }
+  .row span:last-child { text-align:right; font-variant-numeric:tabular-nums; }
+  .actions { display:flex; gap:8px; margin-top:16px; flex-wrap:wrap; }
+  .btn { background:var(--s2); border:1px solid var(--line); border-radius:6px; padding:8px 12px; cursor:pointer; text-decoration:none; color:var(--t1); }
+  .btn.danger { color:#ff6b6b; }
+  .close { position:absolute; left:16px; top:12px; font-size:22px; background:none; border:0; cursor:pointer; z-index:2; }
+  .nav { position:absolute; top:50%; transform:translateY(-50%); background:#0008; border:0; width:44px; height:64px; font-size:22px; cursor:pointer; }
+  .nav.l { left:8px } .nav.r { right:368px }
+  .cl { background:var(--t1); color:#000; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:11px; border:2px solid #000; }
+  .cl.snap { background:#fffc00; }
+  .leaflet-container { font:inherit; }
+  .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) saturate(.25) brightness(.9) contrast(.95); }
+  .leaflet-popup-content-wrapper, .leaflet-popup-tip { background:var(--s1); color:var(--t1); border-radius:8px; }
+  .pop { display:grid; grid-template-columns:repeat(3,72px); gap:3px; max-height:240px; overflow:auto; }
+  .pop div { width:72px; height:72px; background:#111 center/cover; cursor:pointer; }
+  @media (max-width: 800px) { #view .media { inset:0 0 45% 0 } #view aside { top:55%; width:auto; left:0 } .nav.r{right:8px} input.search{width:120px} .stat{display:none} }
+</style>
+</head>
+<body>
+<div id="login">
+  <form id="lf">
+    <div class="logo" style="font-size:28px">Spur<b>.</b></div>
+    <div style="color:var(--t2)">Schl&uuml;ssel aus <code>spur_server.py token</code> eingeben.</div>
+    <input id="tok" type="password" placeholder="Schl&uuml;ssel" autocomplete="current-password">
+    <button>Anmelden</button>
+    <div class="err" id="lerr"></div>
+  </form>
+</div>
+<header>
+  <div class="logo">Spur<b>.</b></div>
+  <nav><button id="tMap" class="on">Karte</button><button id="tGrid">Galerie</button></nav>
+  <div class="grow"></div>
+  <input class="search" id="q" placeholder="Suchen: Ort, Datum, Notiz">
+  <div class="stat" id="stat"></div>
+</header>
+<main>
+  <div id="map"></div>
+  <div id="grid"></div>
+</main>
+<div id="view">
+  <button class="close" onclick="closeView()">&times;</button>
+  <button class="nav l" onclick="step(-1)">&#8249;</button>
+  <button class="nav r" onclick="step(1)">&#8250;</button>
+  <div class="media" id="vmedia"></div>
+  <aside id="vinfo"></aside>
+</div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+let ALL = [], LIST = [], cur = -1, map, layer;
+const $ = s => document.querySelector(s);
+const fmtDate = (ms, tz) => new Date(ms).toLocaleString('de-DE', {dateStyle:'medium', timeStyle:'short'});
+const mb = b => b > 1e9 ? (b/1e9).toFixed(1)+' GB' : (b/1e6).toFixed(1)+' MB';
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+async function api(path, opt) {
+  const r = await fetch(path, Object.assign({credentials:'same-origin'}, opt));
+  if (r.status === 401) { $('#login').style.display='flex'; throw new Error('auth'); }
+  return r.json();
+}
+$('#lf').onsubmit = async e => {
+  e.preventDefault();
+  const r = await fetch('/api/login', {method:'POST', body:JSON.stringify({token:$('#tok').value.trim()})});
+  if (r.ok) { $('#login').style.display='none'; load(); } else $('#lerr').textContent = 'Falscher Schlüssel';
+};
+
+async function load() {
+  let since = 0, items = [];
+  while (true) {
+    const j = await api('/api/media?limit=5000&since=' + since);
+    items.push(...j.items); since = j.cursor;
+    if (!j.more) break;
+  }
+  const byId = new Map(); items.forEach(i => byId.set(i.id, i));
+  ALL = [...byId.values()].filter(i => !i.deleted).sort((a,b) => b.takenAt - a.takenAt);
+  $('#login').style.display = 'none';
+  const s = await api('/api/stats');
+  $('#stat').textContent = `${s.count} Medien · ${mb(s.bytes)} · ${mb(s.diskFree)} frei`;
+  apply();
+}
+
+function apply() {
+  const q = $('#q').value.trim().toLowerCase();
+  LIST = !q ? ALL : ALL.filter(i => [i.address, i.city, i.country, i.note, i.tags, i.source,
+      new Date(i.takenAt).toLocaleDateString('de-DE', {day:'numeric', month:'long', year:'numeric'})]
+      .join(' ').toLowerCase().includes(q));
+  drawGrid(); drawMap();
+}
+$('#q').oninput = () => { clearTimeout(window._t); window._t = setTimeout(apply, 200); };
+
+function thumb(i) { return `/api/media/${i.id}/thumb`; }
+
+function drawGrid() {
+  const g = $('#grid'); let html = '', last = '';
+  LIST.forEach((i, n) => {
+    const m = new Date(i.takenAt).toLocaleDateString('de-DE', {month:'long', year:'numeric'});
+    if (m !== last) { if (last) html += '</div>'; html += `<div class="month">${m}</div><div class="tiles">`; last = m; }
+    html += `<div class="tile" data-n="${n}" style="background-image:url('${thumb(i)}')">` +
+      (i.source === 'snapchat' ? '<div class="s"></div>' : '') +
+      (i.type === 'video' ? `<div class="v">${Math.round((i.durationMs||0)/1000)||''}s ▶</div>` : '') + '</div>';
+  });
+  g.innerHTML = html + (last ? '</div>' : '');
+  g.querySelectorAll('.tile').forEach(t => t.onclick = () => open(+t.dataset.n));
+}
+
+function drawMap() {
+  if (!map) {
+    map = L.map('map', {zoomControl:false, preferCanvas:true}).setView([51.94, 8.87], 6);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+      {attribution:'&copy; OpenStreetMap', maxZoom:19}).addTo(map);
+    map.on('zoomend', drawMap);
+  }
+  if (layer) layer.remove();
+  layer = L.layerGroup().addTo(map);
+  const z = map.getZoom(), cell = 56, cl = new Map();
+  LIST.forEach((i, n) => {
+    if (i.lat == null) return;
+    const p = map.project([i.lat, i.lon], z), k = Math.floor(p.x/cell) + ':' + Math.floor(p.y/cell);
+    let c = cl.get(k); if (!c) cl.set(k, c = {lat:0, lon:0, n:[], snap:0});
+    c.lat += i.lat; c.lon += i.lon; c.n.push(n); if (i.source === 'snapchat') c.snap++;
+  });
+  const pts = [];
+  cl.forEach(c => {
+    const lat = c.lat / c.n.length, lon = c.lon / c.n.length, s = Math.min(44, 18 + Math.log2(c.n.length) * 5);
+    pts.push([lat, lon]);
+    const icon = L.divIcon({className:'', iconSize:[s,s], html:`<div class="cl ${c.snap > c.n.length/2 ? 'snap':''}" style="width:${s}px;height:${s}px">${c.n.length > 1 ? c.n.length : ''}</div>`});
+    const m = L.marker([lat, lon], {icon}).addTo(layer);
+    m.on('click', () => {
+      if (c.n.length === 1) return open(c.n[0]);
+      const html = '<div class="pop">' + c.n.slice(0, 60).map(n => `<div data-n="${n}" style="background-image:url('${thumb(LIST[n])}')"></div>`).join('') + '</div>';
+      m.bindPopup(html, {maxWidth:240}).openPopup();
+      setTimeout(() => document.querySelectorAll('.pop div').forEach(d => d.onclick = () => open(+d.dataset.n)), 0);
+    });
+  });
+  if (!window._fit && pts.length) { window._fit = 1; map.fitBounds(pts, {padding:[40,40], maxZoom:14}); }
+}
+
+function row(k, v) { return v == null || v === '' ? '' : `<div class="row"><span>${k}</span><span>${esc(v)}</span></div>`; }
+function dir(h) { return ['N','NO','O','SO','S','SW','W','NW'][Math.round(((h % 360) + 360) % 360 / 45) % 8]; }
+
+function open(n) {
+  cur = n; const i = LIST[n]; if (!i) return;
+  $('#view').style.display = 'block';
+  const src = `/api/media/${i.id}/file`;
+  $('#vmedia').innerHTML = i.type === 'video' ? `<video src="${src}" controls autoplay playsinline></video>` : `<img src="${src}">`;
+  const place = (i.city && i.city !== '-') ? i.city : (i.lat != null ? 'Ohne Ortsnamen' : 'Kein Standort');
+  $('#vinfo').innerHTML = `<h2>${esc(place)}</h2><div class="sub">${fmtDate(i.takenAt)}</div>` +
+    row('Adresse', i.address) + row('Land', i.country) +
+    row('Koordinaten', i.lat != null ? `${i.lat.toFixed(6)}, ${i.lon.toFixed(6)}` : null) +
+    row('Genauigkeit', i.accuracy != null ? `± ${Math.round(i.accuracy)} m` : null) +
+    row('Höhe', i.altitude != null ? `${Math.round(i.altitude)} m` : null) +
+    row('Richtung', i.heading != null ? `${Math.round(i.heading)}° ${dir(i.heading)}` : null) +
+    row('Tempo', i.speed != null && i.speed > 0.5 ? `${Math.round(i.speed * 3.6)} km/h` : null) +
+    row('Auflösung', i.width ? `${i.width} × ${i.height}` : null) + row('Größe', mb(i.size)) +
+    row('Gerät', i.device) + row('Kamera', i.camera) + row('Quelle', i.source === 'snapchat' ? 'Snapchat' : 'Spur') +
+    row('Notiz', i.note) + row('Tags', i.tags) +
+    `<div class="actions"><a class="btn" href="${src}?download=1">Herunterladen</a>` +
+    (i.lat != null ? `<a class="btn" target="_blank" href="https://www.google.com/maps?q=${i.lat},${i.lon}">In Maps</a>` : '') +
+    `<button class="btn danger" onclick="del('${i.id}')">Löschen</button></div>`;
+}
+function closeView() { $('#view').style.display = 'none'; $('#vmedia').innerHTML = ''; }
+function step(d) { if (cur + d >= 0 && cur + d < LIST.length) open(cur + d); }
+async function del(id) {
+  if (!confirm('Wirklich löschen? (30 Tage im Papierkorb auf dem Server)')) return;
+  await api('/api/media/' + id, {method:'DELETE'});
+  ALL = ALL.filter(i => i.id !== id); closeView(); apply();
+}
+document.addEventListener('keydown', e => {
+  if ($('#view').style.display !== 'block') return;
+  if (e.key === 'Escape') closeView(); if (e.key === 'ArrowLeft') step(-1); if (e.key === 'ArrowRight') step(1);
+});
+$('#tMap').onclick = () => { $('#map').style.display='block'; $('#grid').style.display='none'; $('#tMap').classList.add('on'); $('#tGrid').classList.remove('on'); map && map.invalidateSize(); };
+$('#tGrid').onclick = () => { $('#map').style.display='none'; $('#grid').style.display='block'; $('#tGrid').classList.add('on'); $('#tMap').classList.remove('on'); };
+load().catch(() => {});
+</script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut android:shortcutId="camera" android:enabled="true"
+        android:icon="@drawable/ic_tile" android:shortcutShortLabel="@string/shortcut_camera">
+        <intent android:action="de.zapko.spur.CAMERA"
+            android:targetPackage="de.zapko.spur" android:targetClass="de.zapko.spur.MainActivity" />
+    </shortcut>
+    <shortcut android:shortcutId="map" android:enabled="true"
+        android:icon="@drawable/ic_shortcut_map" android:shortcutShortLabel="@string/shortcut_map">
+        <intent android:action="de.zapko.spur.MAP"
+            android:targetPackage="de.zapko.spur" android:targetClass="de.zapko.spur.MainActivity" />
+    </shortcut>
+</shortcuts>

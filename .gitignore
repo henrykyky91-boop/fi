@@ -1,0 +1,13 @@
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+*.iml
+.DS_Store
+__pycache__/
+spur-data/
+*.part
+# Play-Store-Schluessel NIE hochladen
+*.keystore
+upload*.jks

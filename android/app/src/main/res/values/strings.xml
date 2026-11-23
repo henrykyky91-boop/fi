@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Spur</string>
+    <string name="tile_label">Spur Foto</string>
+    <string name="shortcut_camera">Foto</string>
+    <string name="shortcut_map">Karte</string>
+</resources>

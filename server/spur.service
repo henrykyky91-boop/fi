@@ -1,0 +1,15 @@
+[Unit]
+Description=Spur Foto-Server
+After=network-online.target local-fs.target
+Wants=network-online.target
+RequiresMountsFor=/mnt/server013
+
+[Service]
+User=pi
+WorkingDirectory=/opt/spur
+ExecStart=/usr/bin/python3 /opt/spur/spur_server.py serve --data /mnt/server013/spur --port 8787
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
